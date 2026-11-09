@@ -3,6 +3,9 @@ from collections.abc import Iterator
 from cloudflare import Cloudflare
 
 
+QUERY_OVERLAP_MS = 30_000
+
+
 class QueryError(RuntimeError):
     pass
 
@@ -11,13 +14,15 @@ def event_pages(
         client: Cloudflare, account_id: str, worker: str, start_ms: int, end_ms: int
 ) -> Iterator[list[dict]]:
     query = client.workers.observability.telemetry.with_raw_response.query
+    # Cloudflare excludes both endpoints. Overlap the previous window to cover the boundary.
+    timeframe = {"from": max(0, start_ms - QUERY_OVERLAP_MS), "to": end_ms}
     cursor = {}
     seen_cursors = set()
     while True:
         response = query(
             account_id=account_id,
             query_id="cf-observability-backup",
-            timeframe={"from": start_ms, "to": end_ms},
+            timeframe=timeframe,
             view="events",
             dry=True,
             limit=2000,
