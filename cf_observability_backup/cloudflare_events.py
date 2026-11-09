@@ -3,7 +3,7 @@ from collections.abc import Iterator
 from cloudflare import Cloudflare
 
 
-QUERY_OVERLAP_MS = 30_000
+QUERY_OVERLAP_MS = 5_000
 
 
 class QueryError(RuntimeError):
