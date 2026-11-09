@@ -10,6 +10,10 @@ class QueryError(RuntimeError):
     pass
 
 
+class SampledQueryError(QueryError):
+    pass
+
+
 def event_pages(
         client: Cloudflare, account_id: str, worker: str, start_ms: int, end_ms: int
 ) -> Iterator[list[dict]]:
@@ -45,11 +49,13 @@ def event_pages(
             result = response["result"]
             statistics = result.get("statistics") or {}
             run_statistics = (result.get("run") or {}).get("statistics") or {}
-            if any(
-                    stats.get("abr_level") not in (None, 1)
-                    for stats in (statistics, run_statistics)
-            ):
-                raise QueryError("Cloudflare sampled the query results")
+            abr_level = statistics.get("abr_level")
+            run_abr_level = run_statistics.get("abr_level")
+            if abr_level not in (None, 1) or run_abr_level not in (None, 1):
+                raise SampledQueryError(
+                    f"Cloudflare sampled the query results "
+                    f"(abr_level={abr_level}, run_abr_level={run_abr_level})"
+                )
             event_result = result["events"]
             events = event_result.get("events")
             if events is None and event_result.get("count") == 0:

@@ -6,8 +6,11 @@ import sqlite3
 from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 
+from .cloudflare_events import SampledQueryError
+
 HOUR_MS = 3_600_000
 WINDOW_MS = 30 * 60_000
+MIN_WINDOW_MS = 30_000
 OVERLAP_MS = 30 * 60_000
 
 logger = logging.getLogger(__name__)
@@ -108,25 +111,41 @@ def sync(
 
     inserted = 0
     window_start = max(start_ms, through_ms - OVERLAP_MS)
+    pending_ends: list[int] = []
     while window_start < until_ms:
-        window_end = min(window_start + WINDOW_MS, until_ms)
+        if not pending_ends:
+            pending_ends.append(min(window_start + WINDOW_MS, until_ms))
+        window_end = pending_ends[-1]
         logger.info(
             "worker=%s querying from=%s to=%s",
             worker, utc_timestamp(window_start), utc_timestamp(window_end),
         )
         pages = fetched = window_inserted = 0
-        for events in fetch_pages(window_start, window_end):
-            with db:
-                cursor = db.executemany(
-                    f"""
-                    INSERT INTO {table} (event_id, timestamp_ms, event_json) VALUES (?, ?, ?)
-                    ON CONFLICT (event_id) DO NOTHING
-                    """,
-                    event_rows(events),
-                )
-            pages += 1
-            fetched += len(events)
-            window_inserted += cursor.rowcount
+        try:
+            for events in fetch_pages(window_start, window_end):
+                with db:
+                    cursor = db.executemany(
+                        f"""
+                        INSERT INTO {table} (event_id, timestamp_ms, event_json) VALUES (?, ?, ?)
+                        ON CONFLICT (event_id) DO NOTHING
+                        """,
+                        event_rows(events),
+                    )
+                pages += 1
+                fetched += len(events)
+                window_inserted += cursor.rowcount
+                inserted += cursor.rowcount
+        except SampledQueryError as exc:
+            duration = window_end - window_start
+            if duration <= MIN_WINDOW_MS:
+                raise
+            shorter_duration = max(MIN_WINDOW_MS, duration // 2)
+            pending_ends.append(window_start + shorter_duration)
+            logger.warning(
+                "worker=%s %s; reducing window from %.3fs to %.3fs",
+                worker, exc, duration / 1000, shorter_duration / 1000,
+            )
+            continue
         with db:
             db.execute(
                 """
@@ -139,6 +158,6 @@ def sync(
             "worker=%s window complete pages=%d fetched=%d inserted=%d duplicates=%d",
             worker, pages, fetched, window_inserted, fetched - window_inserted,
         )
-        inserted += window_inserted
+        pending_ends.pop()
         window_start = window_end
     return inserted
