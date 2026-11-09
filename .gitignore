@@ -6,5 +6,8 @@ build/
 dist/
 .env
 *.env
+backup.toml
+backup.lock
+backup.log
 *.sqlite*
 .idea

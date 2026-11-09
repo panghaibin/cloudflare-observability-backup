@@ -1,6 +1,6 @@
 # Cloudflare Observability Backup
 
-把 Cloudflare Workers Observability 中可查询的日志定期拉到 VPS 上的 SQLite。通过参数选择账户和 Worker，可将多个 Worker 归档到同一个数据库。
+把 Cloudflare Workers Observability 中可查询的日志定期拉到 VPS 上的 SQLite。用一个 TOML 文件配置账户、凭据和要归档的 Worker。
 
 ## 安装和试拉
 
@@ -11,76 +11,43 @@ python3 -m venv .venv
 .venv/bin/python -m pip install .
 ```
 
-在 Cloudflare 创建仅限目标账户的 API Token，授予查询接口要求的 `Workers Observability Write` 权限。将凭据配置为环境变量 `CLOUDFLARE_API_TOKEN`，将账户 ID 配置为 `CLOUDFLARE_ACCOUNT_ID` 或通过 `--account-id` 指定。目标 Worker 需要开启 Workers Logs。 [查询接口](https://developers.cloudflare.com/api/resources/workers/subresources/observability/subresources/telemetry/methods/query/) · [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)
+在 Cloudflare 创建仅限目标账户的 API Token，授予查询接口要求的 `Workers Observability Write` 权限。目标 Worker 需要开启 Workers Logs。 [查询接口](https://developers.cloudflare.com/api/resources/workers/subresources/observability/subresources/telemetry/methods/query/) · [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)
+
+首次配置时，把 `backup.example.toml` 复制为 `backup.toml`。在 Linux 上先执行 `umask 077`，并确认配置文件权限为 `0600`。填入账户 ID、Token 和该账户下实际部署的 Worker 名称。
+
+```toml
+account_id = "your-account-id"
+api_token = "your-api-token"
+workers = ["example-worker", "api-worker"]
+db = "archive.sqlite3"
+initial_hours = 24
+```
+
+相对数据库路径以 TOML 文件所在目录为准。手动运行一次，确认配置和权限。
 
 ```sh
 umask 077
-.venv/bin/cf-observability-backup --worker example-worker --db archive.sqlite3
+.venv/bin/cf-observability-backup --config backup.toml
 ```
 
-把 `example-worker` 替换为已部署的脚本名。用 `wcalc-new` 验证时，只需将它传给 `--worker`。
+Windows 上可运行 `\.venv\Scripts\cf-observability-backup.exe --config backup.toml`。原来的单 Worker 用法也可以继续使用，传入 `--worker` 和 `--db`，凭据从环境变量或当前目录的 `.env` 读取。
 
-- 每个账户和 Worker 的首次同步默认回看 24 小时，可用 `--initial-hours` 调整。选择 Cloudflare 仍保留日志的范围。
+- 每个账户和 Worker 的首次同步默认回看 24 小时，可通过 `initial_hours` 调整。选择 Cloudflare 仍保留日志的范围。
 - 查询按最多一小时切段，同一段使用固定起止时间翻页。整段翻完才推进进度。失败后重跑会从上次完成位置继续，按事件 ID 去重。
+- 一个 Worker 失败后，仍会尝试同步列表里的其他 Worker，整次命令以非零状态退出。
 - 若 API 报告查询结果经过采样，本次同步会报错并保留该段的进度点。
 - 后续同步会从进度点往前重叠 30 分钟，以收集延迟可见的日志。Cloudflare 已过期或未摄入的日志无法补回。
 - 数据库保存完整事件 JSON，以及来源、事件 ID 和毫秒时间戳。业务字段可在查询时提取。
 
 ## 在 VPS 上定时运行
 
-下面的示例假设工具安装在 `/opt/cloudflare-observability-backup/.venv`。先创建用于运行采集的系统账户。
+在运行备份的用户下执行 `crontab -e`，加入下面一行。示例假设项目和配置位于该用户的 `~/cloudflare-observability-backup`。
 
-```sh
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin cf-observability-backup
+```cron
+*/10 * * * * umask 077; cd "$HOME/cloudflare-observability-backup" && /usr/bin/flock -n backup.lock ./.venv/bin/cf-observability-backup --config backup.toml >> backup.log 2>&1
 ```
 
-把账户 ID 和 Token 放进由 root 持有的 `/etc/cf-observability-backup/example-worker.env`，文件权限设为 `0600`。
-
-```ini
-CLOUDFLARE_ACCOUNT_ID=your-account-id
-CLOUDFLARE_API_TOKEN=your-api-token
-```
-
-将以下服务保存为 `/etc/systemd/system/cf-observability-backup@.service`。
-
-```ini
-[Unit]
-Description=Archive Cloudflare Workers Observability logs for %i
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-Type=oneshot
-User=cf-observability-backup
-StateDirectory=cf-observability-backup
-StateDirectoryMode=0700
-UMask=0077
-EnvironmentFile=/etc/cf-observability-backup/%i.env
-ExecStart=/opt/cloudflare-observability-backup/.venv/bin/cf-observability-backup --worker %i --db /var/lib/cf-observability-backup/archive.sqlite3
-```
-
-每增加一个 Worker，为它创建同名的 `.env` 文件并启用对应的定时器实例。
-
-将以下定时器保存为 `/etc/systemd/system/cf-observability-backup@.timer`。
-
-```ini
-[Unit]
-Description=Run the Cloudflare Observability archive every ten minutes for %i
-
-[Timer]
-OnCalendar=*-*-* *:00/10:00
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-```sh
-sudo systemctl daemon-reload
-sudo systemctl start cf-observability-backup@example-worker.service
-sudo systemctl enable --now cf-observability-backup@example-worker.timer
-sudo journalctl -u cf-observability-backup@example-worker.service
-```
+每 10 分钟运行一次。`flock` 在上一轮仍运行时跳过这次触发，下一轮从 SQLite 里的同步进度继续。以后增减目标时只需修改 `backup.toml` 里的 `workers`。 [crontab 手册](https://man7.org/linux/man-pages/man5/crontab.5.html) · [flock 手册](https://man7.org/linux/man-pages/man1/flock.1.html)
 
 ## 本地查询和数据库快照
 

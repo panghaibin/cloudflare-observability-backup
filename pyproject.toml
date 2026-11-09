@@ -7,7 +7,11 @@ name = "cloudflare-observability-backup"
 version = "0.1.0"
 description = "Archive Cloudflare Workers Observability events to SQLite"
 requires-python = ">=3.10"
-dependencies = ["cloudflare==5.10.0"]
+dependencies = [
+    "cloudflare==5.10.0",
+    "python-dotenv>=1.1,<2",
+    "tomli>=2,<3; python_version < '3.11'",
+]
 
 [project.scripts]
 cf-observability-backup = "cf_observability_backup.cli:main"

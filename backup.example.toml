@@ -1,0 +1,5 @@
+account_id = ""
+api_token = ""
+workers = ["example-worker"]
+db = "archive.sqlite3"
+initial_hours = 24
