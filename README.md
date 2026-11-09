@@ -6,7 +6,8 @@
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install .
+. .venv/bin/activate
+python3 -m pip install -r requirements.txt
 umask 077
 cp backup.example.toml backup.toml
 chmod 600 backup.toml
@@ -22,14 +23,14 @@ db = "archive.sqlite3"
 initial_hours = 24
 ```
 
-手动运行 `.venv/bin/cf-observability-backup`，Windows 用 `\.venv\Scripts\cf-observability-backup.exe`。默认读取当前目录的 `backup.toml`，可用 `--config` 指定路径。相对数据库路径和运行日志均以配置文件所在目录为准。
+在项目目录运行 `python3 backup.py`，Windows 用 `\.venv\Scripts\python.exe backup.py`。默认读取当前目录的 `backup.toml`，可用 `--config` 指定路径。相对数据库路径和运行日志均以配置文件所在目录为准。
 
 ## 定时运行
 
 用 `crontab -e` 加入每 10 分钟运行的任务，并按需修改项目路径。
 
 ```cron
-*/10 * * * * umask 077; cd "$HOME/cloudflare-observability-backup" && /usr/bin/flock -n backup.lock ./.venv/bin/cf-observability-backup
+*/10 * * * * umask 077; cd "$HOME/cloudflare-observability-backup" && /usr/bin/flock -n backup.lock ./.venv/bin/python backup.py
 ```
 
 程序同时写控制台和 `backup.log`，跨日首次写入时按服务器本地日期轮换到 `logs/backup.log.yyyy-MM-dd`。

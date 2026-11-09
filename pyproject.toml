@@ -7,13 +7,13 @@ name = "cloudflare-observability-backup"
 version = "0.1.0"
 description = "Archive Cloudflare Workers Observability events to SQLite"
 requires-python = ">=3.10"
-dependencies = [
-    "cloudflare==5.10.0",
-    "tomli>=2,<3; python_version < '3.11'",
-]
+dynamic = ["dependencies"]
 
 [project.scripts]
 cf-observability-backup = "cf_observability_backup.cli:main"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.packages.find]
 include = ["cf_observability_backup"]
