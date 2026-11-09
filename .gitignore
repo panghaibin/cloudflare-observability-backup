@@ -9,5 +9,6 @@ dist/
 backup.toml
 backup.lock
 backup.log
+logs/backup.log.*
 *.sqlite*
 .idea
