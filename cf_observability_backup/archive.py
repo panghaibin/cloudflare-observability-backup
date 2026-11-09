@@ -7,6 +7,7 @@ from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 
 HOUR_MS = 3_600_000
+WINDOW_MS = 30 * 60_000
 OVERLAP_MS = 30 * 60_000
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,7 @@ def sync(
     inserted = 0
     window_start = max(start_ms, through_ms - OVERLAP_MS)
     while window_start < until_ms:
-        window_end = min(window_start + HOUR_MS, until_ms)
+        window_end = min(window_start + WINDOW_MS, until_ms)
         logger.info(
             "worker=%s querying from=%s to=%s",
             worker, utc_timestamp(window_start), utc_timestamp(window_end),
