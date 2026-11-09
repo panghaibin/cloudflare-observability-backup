@@ -14,7 +14,6 @@ from .cloudflare_events import QueryError, event_pages
 from .config import Settings, load_settings
 from .run_logging import run_logging
 
-
 logger = logging.getLogger(__name__)
 
 

@@ -26,9 +26,9 @@ def load_settings(path: Path) -> Settings:
 
     workers = config.get("workers")
     if (
-        not isinstance(workers, list)
-        or not workers
-        or any(not isinstance(worker, str) or not worker.strip() for worker in workers)
+            not isinstance(workers, list)
+            or not workers
+            or any(not isinstance(worker, str) or not worker.strip() for worker in workers)
     ):
         raise ValueError("workers must be a non-empty list of Worker names")
     if len(set(workers)) != len(workers):

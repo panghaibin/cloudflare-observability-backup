@@ -8,7 +8,7 @@ class QueryError(RuntimeError):
 
 
 def event_pages(
-    client: Cloudflare, account_id: str, worker: str, start_ms: int, end_ms: int
+        client: Cloudflare, account_id: str, worker: str, start_ms: int, end_ms: int
 ) -> Iterator[list[dict]]:
     query = client.workers.observability.telemetry.with_raw_response.query
     cursor = {}
@@ -41,8 +41,8 @@ def event_pages(
             statistics = result.get("statistics") or {}
             run_statistics = (result.get("run") or {}).get("statistics") or {}
             if any(
-                stats.get("abr_level") not in (None, 1)
-                for stats in (statistics, run_statistics)
+                    stats.get("abr_level") not in (None, 1)
+                    for stats in (statistics, run_statistics)
             ):
                 raise QueryError("Cloudflare sampled the query results")
             event_result = result["events"]

@@ -6,7 +6,6 @@ import sqlite3
 from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 
-
 HOUR_MS = 3_600_000
 OVERLAP_MS = 30 * 60_000
 
@@ -75,12 +74,12 @@ def event_rows(events: Iterable[dict]) -> Iterable[tuple[str, int, str]]:
 
 
 def sync(
-    db: sqlite3.Connection,
-    account_id: str,
-    worker: str,
-    until_ms: int,
-    initial_hours: int,
-    fetch_pages: Callable[[int, int], Iterable[list[dict]]],
+        db: sqlite3.Connection,
+        account_id: str,
+        worker: str,
+        until_ms: int,
+        initial_hours: int,
+        fetch_pages: Callable[[int, int], Iterable[list[dict]]],
 ) -> int:
     db.execute("PRAGMA journal_mode = WAL")
     source = (account_id, worker)
