@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from .cloudflare_events import SampledQueryError
 
 HOUR_MS = 3_600_000
-WINDOW_MS = 30 * 60_000
+WINDOW_MS = HOUR_MS
 MIN_WINDOW_MS = 30_000
 OVERLAP_MS = 30 * 60_000
 
